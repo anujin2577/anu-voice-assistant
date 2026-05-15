@@ -476,6 +476,27 @@ body.dark-theme .phone-ask input::placeholder {
   cursor: pointer;
 }
 
+.phone-play-button {
+  min-height: 50px;
+  justify-self: center;
+  padding: 0 24px;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 999px;
+  background: linear-gradient(145deg, #b91c1c, #7f1d1d 72%);
+  box-shadow:
+    0 14px 42px rgba(127, 29, 29, 0.28),
+    0 0 0 7px rgba(185, 28, 28, 0.08);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.phone-play-button[hidden] {
+  display: none;
+}
+
 .talk-button {
   width: 88px;
   height: 88px;

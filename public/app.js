@@ -25,6 +25,7 @@ const phoneFallbackText = document.querySelector("#phoneFallbackText");
 const phoneAskForm = document.querySelector("#phoneAskForm");
 const phoneQuestion = document.querySelector("#phoneQuestion");
 const phoneAskButton = document.querySelector("#phoneAskButton");
+const phonePlayButton = document.querySelector("#phonePlayButton");
 
 let recognition = null;
 let mode = "idle";
@@ -34,6 +35,7 @@ let wakeEnabled = false;
 let wakeLanguageIndex = 0;
 let darkModeEnabled = getSavedTheme() === "dark";
 let browserSpeechUnlocked = false;
+let pendingPhoneAudioUrl = null;
 const isIosDevice =
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -107,7 +109,9 @@ function phoneFallbackCopy() {
         "On iPhone, tap this field and use the keyboard microphone. Anu will still answer with voice.",
       placeholder: "Speak or type your question...",
       button: "Ask",
+      play: "Play answer",
       status: "iPhone voice input",
+      playNeeded: "Tap Play answer so iPhone can start Anu's voice.",
       wake:
         "Wake-up is limited on iPhone browsers. Please use the question field below for the phone demo.",
     };
@@ -118,7 +122,9 @@ function phoneFallbackCopy() {
       "iPhone дээр доорх талбарт дараад keyboard-ийн microphone товчоор асуултаа хэлнэ үү. Ану хариултаа дуугаар хэлнэ.",
     placeholder: "Асуултаа хэлэх эсвэл бичих...",
     button: "Илгээх",
+    play: "Хариултыг тоглуулах",
     status: "iPhone voice input",
+    playNeeded: "iPhone дууг хаасан байна. Хариултыг тоглуулах товчийг дарна уу.",
     wake:
       "iPhone browser дээр Wake-up найдвартай ажиллахгүй. Утасны demo-д доорх асуултын талбарыг ашиглана уу.",
   };
@@ -131,6 +137,7 @@ function updatePhoneFallbackCopy() {
   phoneFallbackText.textContent = phoneCopy.text;
   phoneQuestion.placeholder = phoneCopy.placeholder;
   phoneAskButton.textContent = phoneCopy.button;
+  if (phonePlayButton) phonePlayButton.textContent = phoneCopy.play;
 }
 
 function showPhoneFallback(message) {
@@ -146,6 +153,40 @@ function showPhoneFallback(message) {
 function focusPhoneFallback() {
   showPhoneFallback(phoneFallbackCopy().status);
   window.setTimeout(() => phoneQuestion?.focus(), 80);
+}
+
+function clearPendingPhoneAudio() {
+  if (pendingPhoneAudioUrl) {
+    URL.revokeObjectURL(pendingPhoneAudioUrl);
+    pendingPhoneAudioUrl = null;
+  }
+
+  if (phonePlayButton) {
+    phonePlayButton.hidden = true;
+  }
+}
+
+function audioToObjectUrl(audio) {
+  const binary = atob(audio.base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  const blob = new Blob([bytes], { type: audio.mimeType || "audio/mpeg" });
+  return URL.createObjectURL(blob);
+}
+
+function preparePhoneAudioButton(audio) {
+  if (!isIosDevice || !audio?.base64 || !phonePlayButton) return false;
+
+  clearPendingPhoneAudio();
+  pendingPhoneAudioUrl = audioToObjectUrl(audio);
+  showPhoneFallback(phoneFallbackCopy().playNeeded);
+  phoneFallbackText.textContent = phoneFallbackCopy().playNeeded;
+  phonePlayButton.hidden = false;
+  return true;
 }
 
 function createRecognition({ continuous = false, interimResults = false, lang = recognitionLanguage() } = {}) {
@@ -390,6 +431,7 @@ function removeWakePhrase(text, wakePhrase) {
 
 async function handleQuestion(text) {
   const lang = selectedLanguage();
+  clearPendingPhoneAudio();
 
   if (!text) {
     setState("ready", copy[lang].noQuestion);
@@ -503,12 +545,26 @@ async function playAnuAudio(audio) {
   }
 
   setState("speaking", copy[selectedLanguage()].speaking);
-  currentAudio = new Audio(`data:${audio.mimeType};base64,${audio.base64}`);
+  const objectUrl = isIosDevice ? audioToObjectUrl(audio) : null;
+  currentAudio = new Audio(objectUrl || `data:${audio.mimeType};base64,${audio.base64}`);
 
   return new Promise((resolve) => {
-    currentAudio.onended = () => resolve(true);
-    currentAudio.onerror = () => resolve(false);
-    currentAudio.play().catch(() => resolve(false));
+    const finish = (played) => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      resolve(played);
+    };
+
+    currentAudio.onended = () => finish(true);
+    currentAudio.onerror = () => finish(false);
+    currentAudio.play().catch(() => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (preparePhoneAudioButton(audio)) {
+        resolve(true);
+        return;
+      }
+
+      resolve(false);
+    });
   });
 }
 
@@ -993,6 +1049,22 @@ phoneAskForm?.addEventListener("submit", (event) => {
 
   phoneQuestion.value = "";
   handleQuestion(text);
+});
+
+phonePlayButton?.addEventListener("click", async () => {
+  primeSpeechSynthesis();
+
+  if (!pendingPhoneAudioUrl) return;
+
+  const audioUrl = pendingPhoneAudioUrl;
+  const played = await playUrlAudio(audioUrl);
+  if (played) {
+    URL.revokeObjectURL(audioUrl);
+    if (pendingPhoneAudioUrl === audioUrl) {
+      pendingPhoneAudioUrl = null;
+    }
+    phonePlayButton.hidden = true;
+  }
 });
 
 function updateLanguageToggle() {
