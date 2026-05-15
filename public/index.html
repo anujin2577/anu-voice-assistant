@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Anu Voice Assistant</title>
-    <link rel="stylesheet" href="/styles.css?v=17" />
+    <link rel="stylesheet" href="/styles.css?v=18" />
   </head>
   <body>
     <main class="shell">
@@ -89,10 +89,26 @@
           <input id="wakeMode" class="hidden-control" type="checkbox" />
         </div>
 
+        <div id="phoneFallback" class="phone-fallback" hidden>
+          <p id="phoneFallbackText">
+            iPhone дээр доорх талбарт дараад keyboard-ийн microphone товчоор асуултаа хэлнэ үү.
+          </p>
+          <form id="phoneAskForm" class="phone-ask">
+            <input
+              id="phoneQuestion"
+              type="text"
+              autocomplete="off"
+              inputmode="text"
+              placeholder="Асуултаа хэлэх эсвэл бичих..."
+            />
+            <button id="phoneAskButton" type="submit">Илгээх</button>
+          </form>
+        </div>
+
         <p id="userText" class="sr-only">No question yet.</p>
       </section>
     </main>
 
-    <script src="/app.js?v=17" type="module"></script>
+    <script src="/app.js?v=18" type="module"></script>
   </body>
 </html>

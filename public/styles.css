@@ -416,6 +416,66 @@ body.dark-theme .wake-mode-button.active {
   padding-bottom: 18px;
 }
 
+.phone-fallback {
+  width: min(620px, 86vw);
+  margin: -8px auto 12px;
+  display: grid;
+  gap: 12px;
+  text-align: center;
+}
+
+.phone-fallback[hidden] {
+  display: none;
+}
+
+.phone-fallback p {
+  margin: 0;
+  color: var(--spoken-text);
+  font-size: clamp(0.92rem, 1.5vw, 1.06rem);
+  font-weight: 700;
+  line-height: 1.35;
+  text-shadow: var(--spoken-shadow);
+}
+
+.phone-ask {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.phone-ask input,
+.phone-ask button {
+  height: 48px;
+  border: 1px solid var(--control-border);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.phone-ask input {
+  min-width: 0;
+  padding: 0 18px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: var(--control-shadow);
+}
+
+.phone-ask input::placeholder {
+  color: rgba(31, 42, 61, 0.58);
+}
+
+body.dark-theme .phone-ask input::placeholder {
+  color: rgba(247, 242, 255, 0.55);
+}
+
+.phone-ask button {
+  padding: 0 20px;
+  color: #ffffff;
+  background: linear-gradient(145deg, #7c3aed, #4c1d95);
+  cursor: pointer;
+}
+
 .talk-button {
   width: 88px;
   height: 88px;
@@ -680,6 +740,10 @@ body.dark-theme .wake-mode-button.active {
   .controls {
     align-items: center;
     padding-bottom: 12px;
+  }
+
+  .phone-ask {
+    grid-template-columns: 1fr;
   }
 
   .talk-button {

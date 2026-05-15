@@ -20,6 +20,11 @@ const voiceLabel = document.querySelector("#voiceLabel");
 const voiceGenderSelect = document.querySelector("#voiceGender");
 const userTextEl = document.querySelector("#userText");
 const anuTextEl = document.querySelector("#anuText");
+const phoneFallback = document.querySelector("#phoneFallback");
+const phoneFallbackText = document.querySelector("#phoneFallbackText");
+const phoneAskForm = document.querySelector("#phoneAskForm");
+const phoneQuestion = document.querySelector("#phoneQuestion");
+const phoneAskButton = document.querySelector("#phoneAskButton");
 
 let recognition = null;
 let mode = "idle";
@@ -29,6 +34,9 @@ let wakeEnabled = false;
 let wakeLanguageIndex = 0;
 let darkModeEnabled = getSavedTheme() === "dark";
 let browserSpeechUnlocked = false;
+const isIosDevice =
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
 const copy = {
   mn: {
@@ -92,10 +100,63 @@ function setState(nextMode, message) {
   talkButton.disabled = nextMode === "thinking" || nextMode === "speaking";
 }
 
+function phoneFallbackCopy() {
+  if (selectedLanguage() === "en") {
+    return {
+      text:
+        "On iPhone, tap this field and use the keyboard microphone. Anu will still answer with voice.",
+      placeholder: "Speak or type your question...",
+      button: "Ask",
+      status: "iPhone voice input",
+      wake:
+        "Wake-up is limited on iPhone browsers. Please use the question field below for the phone demo.",
+    };
+  }
+
+  return {
+    text:
+      "iPhone дээр доорх талбарт дараад keyboard-ийн microphone товчоор асуултаа хэлнэ үү. Ану хариултаа дуугаар хэлнэ.",
+    placeholder: "Асуултаа хэлэх эсвэл бичих...",
+    button: "Илгээх",
+    status: "iPhone voice input",
+    wake:
+      "iPhone browser дээр Wake-up найдвартай ажиллахгүй. Утасны demo-д доорх асуултын талбарыг ашиглана уу.",
+  };
+}
+
+function updatePhoneFallbackCopy() {
+  if (!phoneFallbackText || !phoneQuestion || !phoneAskButton) return;
+
+  const phoneCopy = phoneFallbackCopy();
+  phoneFallbackText.textContent = phoneCopy.text;
+  phoneQuestion.placeholder = phoneCopy.placeholder;
+  phoneAskButton.textContent = phoneCopy.button;
+}
+
+function showPhoneFallback(message) {
+  if (!phoneFallback) return;
+
+  updatePhoneFallbackCopy();
+  phoneFallback.hidden = false;
+  if (message) {
+    setState("ready", message);
+  }
+}
+
+function focusPhoneFallback() {
+  showPhoneFallback(phoneFallbackCopy().status);
+  window.setTimeout(() => phoneQuestion?.focus(), 80);
+}
+
 function createRecognition({ continuous = false, interimResults = false, lang = recognitionLanguage() } = {}) {
   if (!SpeechRecognition) {
-    setState("error", copy[selectedLanguage()].unsupported);
-    anuTextEl.textContent = copy[selectedLanguage()].unsupported;
+    if (isIosDevice) {
+      focusPhoneFallback();
+      anuTextEl.textContent = phoneFallbackCopy().text;
+    } else {
+      setState("error", copy[selectedLanguage()].unsupported);
+      anuTextEl.textContent = copy[selectedLanguage()].unsupported;
+    }
     return null;
   }
 
@@ -149,6 +210,12 @@ function startQuestionListening() {
     stopRecognition();
 
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      if (isIosDevice) {
+        focusPhoneFallback();
+        anuTextEl.textContent = phoneFallbackCopy().text;
+        return;
+      }
+
       setState("error", copy[selectedLanguage()].blocked);
       anuTextEl.textContent = copy[selectedLanguage()].blocked;
       return;
@@ -210,8 +277,13 @@ function startWakeCycle() {
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
       wakeEnabled = false;
       updateWakeToggle();
-      setState("error", copy[selectedLanguage()].blocked);
-      anuTextEl.textContent = copy[selectedLanguage()].blocked;
+      if (isIosDevice) {
+        focusPhoneFallback();
+        anuTextEl.textContent = phoneFallbackCopy().wake;
+      } else {
+        setState("error", copy[selectedLanguage()].blocked);
+        anuTextEl.textContent = copy[selectedLanguage()].blocked;
+      }
       return;
     }
 
@@ -863,6 +935,11 @@ function primeSpeechSynthesis() {
 
 talkButton.addEventListener("click", () => {
   primeSpeechSynthesis();
+  if (isIosDevice) {
+    focusPhoneFallback();
+    return;
+  }
+
   startQuestionListening();
 });
 
@@ -904,6 +981,20 @@ voiceGenderSelect.addEventListener("change", () => {
   updateVoiceToggle();
 });
 
+phoneAskForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  primeSpeechSynthesis();
+
+  const text = phoneQuestion.value.trim();
+  if (!text) {
+    phoneQuestion.focus();
+    return;
+  }
+
+  phoneQuestion.value = "";
+  handleQuestion(text);
+});
+
 function updateLanguageToggle() {
   const isEnglish = selectedLanguage() === "en";
 
@@ -913,6 +1004,7 @@ function updateLanguageToggle() {
   headerLogo.alt =
     "ANU - \u0422\u0430\u043d\u044b \u0434\u0438\u0436\u0438\u0442\u0430\u043b \u0442\u0443\u0441\u043b\u0430\u0445 - Your AI Assistant";
   updateVoiceToggle();
+  updatePhoneFallbackCopy();
 }
 
 function updateVoiceToggle() {
@@ -964,8 +1056,20 @@ function saveTheme(theme) {
 }
 
 function setWakeEnabled(enabled) {
+  if (enabled && isIosDevice) {
+    wakeEnabled = false;
+    updateWakeToggle();
+    showPhoneFallback(phoneFallbackCopy().wake);
+    anuTextEl.textContent = phoneFallbackCopy().wake;
+    return;
+  }
+
   if (enabled && !SpeechRecognition) {
-    setState("error", copy[selectedLanguage()].unsupported);
+    if (isIosDevice) {
+      focusPhoneFallback();
+    } else {
+      setState("error", copy[selectedLanguage()].unsupported);
+    }
     return;
   }
 
@@ -984,12 +1088,18 @@ function setWakeEnabled(enabled) {
 }
 
 updateThemeToggle();
+updateWakeToggle();
+updateLanguageToggle();
+updateVoiceToggle();
 
 if (!SpeechRecognition) {
-  setState("error", copy[selectedLanguage()].unsupported);
+  if (isIosDevice) {
+    showPhoneFallback(copy[selectedLanguage()].ready);
+  } else {
+    setState("error", copy[selectedLanguage()].unsupported);
+  }
+} else if (isIosDevice) {
+  showPhoneFallback(copy[selectedLanguage()].ready);
 } else {
-  updateWakeToggle();
-  updateLanguageToggle();
-  updateVoiceToggle();
   setState("ready", copy[selectedLanguage()].ready);
 }
