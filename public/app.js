@@ -36,9 +36,14 @@ let wakeLanguageIndex = 0;
 let darkModeEnabled = getSavedTheme() === "dark";
 let browserSpeechUnlocked = false;
 let pendingPhoneAudioUrl = null;
+let phoneRecorder = null;
+let phoneRecordingStream = null;
+let phoneRecordingChunks = [];
+let phoneRecordingTimer = null;
 const isIosDevice =
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const phoneRecordMs = 6500;
 
 const copy = {
   mn: {
@@ -106,27 +111,35 @@ function phoneFallbackCopy() {
   if (selectedLanguage() === "en") {
     return {
       text:
-        "On iPhone, tap this field and use the keyboard microphone. Anu will still answer with voice.",
+        "Tap the red microphone and speak. Anu will listen for a few seconds, then answer with voice.",
       placeholder: "Speak or type your question...",
       button: "Ask",
       play: "Play answer",
-      status: "iPhone voice input",
+      status: "Tap the red mic and speak",
+      recording: "Listening on phone",
+      transcribing: "Understanding your voice",
       playNeeded: "Tap Play answer so iPhone can start Anu's voice.",
       wake:
         "Wake-up is limited on iPhone browsers. Please use the question field below for the phone demo.",
+      noRecorder:
+        "This phone browser cannot record directly. Use the question field below with the keyboard microphone.",
     };
   }
 
   return {
     text:
-      "iPhone дээр доорх талбарт дараад keyboard-ийн microphone товчоор асуултаа хэлнэ үү. Ану хариултаа дуугаар хэлнэ.",
+      "Улаан microphone товчийг дараад асуултаа хэлнэ үү. Ану хэдэн секунд сонсоод дуугаар хариулна.",
     placeholder: "Асуултаа хэлэх эсвэл бичих...",
     button: "Илгээх",
     play: "Хариултыг тоглуулах",
-    status: "iPhone voice input",
+    status: "Улаан mic дараад асуултаа хэлнэ үү",
+    recording: "Утаснаас сонсож байна",
+    transcribing: "Таны дууг ойлгож байна",
     playNeeded: "iPhone дууг хаасан байна. Хариултыг тоглуулах товчийг дарна уу.",
     wake:
       "iPhone browser дээр Wake-up найдвартай ажиллахгүй. Утасны demo-д доорх асуултын талбарыг ашиглана уу.",
+    noRecorder:
+      "Энэ browser шууд бичлэг хийх боломжгүй байна. Доорх талбарт keyboard microphone ашиглана уу.",
   };
 }
 
@@ -153,6 +166,160 @@ function showPhoneFallback(message) {
 function focusPhoneFallback() {
   showPhoneFallback(phoneFallbackCopy().status);
   window.setTimeout(() => phoneQuestion?.focus(), 80);
+}
+
+function canUsePhoneRecorder() {
+  return Boolean(isIosDevice && navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
+}
+
+function phoneAudioMimeType() {
+  const options = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+    "audio/aac",
+  ];
+
+  return options.find((item) => MediaRecorder.isTypeSupported(item)) || "";
+}
+
+async function startPhoneRecording() {
+  clearPendingPhoneAudio();
+  stopRecognition();
+
+  if (!canUsePhoneRecorder()) {
+    showPhoneFallback(phoneFallbackCopy().noRecorder);
+    anuTextEl.textContent = phoneFallbackCopy().noRecorder;
+    window.setTimeout(() => phoneQuestion?.focus(), 80);
+    return;
+  }
+
+  try {
+    phoneRecordingChunks = [];
+    phoneRecordingStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+
+    const mimeType = phoneAudioMimeType();
+    phoneRecorder = new MediaRecorder(
+      phoneRecordingStream,
+      mimeType ? { mimeType } : undefined
+    );
+
+    phoneRecorder.ondataavailable = (event) => {
+      if (event.data?.size) {
+        phoneRecordingChunks.push(event.data);
+      }
+    };
+
+    phoneRecorder.onstop = () => {
+      const recordingType = phoneRecorder.mimeType || mimeType || "audio/webm";
+      const recording = new Blob(phoneRecordingChunks, { type: recordingType });
+      cleanupPhoneRecorder();
+      processPhoneRecording(recording);
+    };
+
+    phoneRecorder.start();
+    talkButton.classList.add("recording");
+    setState("listening", phoneFallbackCopy().recording);
+    anuTextEl.textContent =
+      selectedLanguage() === "en"
+        ? "I am listening. Please ask your question now."
+        : "Би сонсож байна. Асуултаа одоо хэлнэ үү.";
+
+    phoneRecordingTimer = window.setTimeout(stopPhoneRecording, phoneRecordMs);
+  } catch (_error) {
+    cleanupPhoneRecorder();
+    showPhoneFallback(copy[selectedLanguage()].blocked);
+    anuTextEl.textContent = copy[selectedLanguage()].blocked;
+  }
+}
+
+function stopPhoneRecording() {
+  if (phoneRecordingTimer) {
+    window.clearTimeout(phoneRecordingTimer);
+    phoneRecordingTimer = null;
+  }
+
+  if (phoneRecorder && phoneRecorder.state !== "inactive") {
+    phoneRecorder.stop();
+  }
+}
+
+function cleanupPhoneRecorder() {
+  talkButton.classList.remove("recording");
+
+  if (phoneRecordingTimer) {
+    window.clearTimeout(phoneRecordingTimer);
+    phoneRecordingTimer = null;
+  }
+
+  if (phoneRecordingStream) {
+    phoneRecordingStream.getTracks().forEach((track) => track.stop());
+    phoneRecordingStream = null;
+  }
+
+  phoneRecorder = null;
+}
+
+async function processPhoneRecording(recording) {
+  if (!recording?.size || recording.size < 1200) {
+    setState("ready", copy[selectedLanguage()].noQuestion);
+    anuTextEl.textContent = copy[selectedLanguage()].noQuestion;
+    return;
+  }
+
+  try {
+    setState("thinking", phoneFallbackCopy().transcribing);
+    anuTextEl.textContent = selectedLanguage() === "en" ? "Understanding..." : "Ойлгож байна...";
+
+    const audioBase64 = await blobToBase64(recording);
+    const response = await fetch("/api/transcribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        audioBase64,
+        mimeType: recording.type || "audio/webm",
+        language: selectedLanguage(),
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Transcription failed.");
+    }
+
+    const text = String(data.text || "").trim();
+    if (!text) {
+      setState("ready", copy[selectedLanguage()].noQuestion);
+      anuTextEl.textContent = copy[selectedLanguage()].noQuestion;
+      return;
+    }
+
+    await handleQuestion(text);
+  } catch (_error) {
+    showPhoneFallback(phoneFallbackCopy().noRecorder);
+    anuTextEl.textContent =
+      selectedLanguage() === "en"
+        ? "I could not understand the phone recording yet. Please use the question field below."
+        : "Утасны дууг ойлгож чадсангүй. Доорх талбарт keyboard microphone ашиглана уу.";
+  }
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = String(reader.result || "");
+      resolve(result.includes(",") ? result.split(",").pop() : result);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 }
 
 function clearPendingPhoneAudio() {
@@ -992,7 +1159,11 @@ function primeSpeechSynthesis() {
 talkButton.addEventListener("click", () => {
   primeSpeechSynthesis();
   if (isIosDevice) {
-    focusPhoneFallback();
+    if (phoneRecorder?.state === "recording") {
+      stopPhoneRecording();
+    } else {
+      startPhoneRecording();
+    }
     return;
   }
 
@@ -1165,13 +1336,17 @@ updateLanguageToggle();
 updateVoiceToggle();
 
 if (!SpeechRecognition) {
-  if (isIosDevice) {
+  if (canUsePhoneRecorder()) {
+    setState("ready", phoneFallbackCopy().status);
+    anuTextEl.textContent = phoneFallbackCopy().text;
+  } else if (isIosDevice) {
     showPhoneFallback(copy[selectedLanguage()].ready);
   } else {
     setState("error", copy[selectedLanguage()].unsupported);
   }
 } else if (isIosDevice) {
-  showPhoneFallback(copy[selectedLanguage()].ready);
+  setState("ready", phoneFallbackCopy().status);
+  anuTextEl.textContent = phoneFallbackCopy().text;
 } else {
   setState("ready", copy[selectedLanguage()].ready);
 }

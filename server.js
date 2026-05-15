@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 3000;
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const TEXT_MODEL = process.env.OPENAI_TEXT_MODEL || "gpt-5-mini";
+const TRANSCRIBE_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe";
 const TTS_MODEL = process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts";
 const TTS_VOICE = process.env.OPENAI_TTS_VOICE || "marin";
 const TTS_PROVIDER = process.env.TTS_PROVIDER || "auto";
@@ -36,7 +37,7 @@ const CHIMEGE_FORMAT = process.env.CHIMEGE_FORMAT || "mp3";
 const DEMO_MODE = (process.env.DEMO_MODE || "auto").toLowerCase();
 
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "15mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/api/health", (_req, res) => {
@@ -131,6 +132,60 @@ app.post("/api/speak", async (req, res) => {
   } catch (error) {
     console.error("Anu speak API error:", error);
     res.status(500).json({ error: "Anu could not generate speech right now." });
+  }
+});
+
+app.post("/api/transcribe", async (req, res) => {
+  try {
+    const { audioBase64, mimeType = "audio/webm", language = "mn" } = req.body || {};
+
+    if (!audioBase64) {
+      return res.status(400).json({ error: "Please send audioBase64." });
+    }
+
+    if (!isRealConfigValue(OPENAI_API_KEY)) {
+      return res.status(500).json({
+        error: "Phone microphone transcription needs OPENAI_API_KEY on the backend.",
+      });
+    }
+
+    const audioBuffer = Buffer.from(String(audioBase64), "base64");
+    if (!audioBuffer.length) {
+      return res.status(400).json({ error: "The audio recording was empty." });
+    }
+
+    const formData = new FormData();
+    const audioBlob = new Blob([audioBuffer], { type: mimeType });
+    formData.append("file", audioBlob, `question.${audioExtension(mimeType)}`);
+    formData.append("model", TRANSCRIBE_MODEL);
+    formData.append("response_format", "json");
+    formData.append(
+      "prompt",
+      "This is a short question for Anu, a Mongolian voice assistant demo. Common terms: Anu, Amjilt Cyber, Level Up, AI assistant."
+    );
+
+    if (language === "mn" || language === "en") {
+      formData.append("language", language);
+    }
+
+    const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const details = await response.text();
+      throw new Error(`OpenAI transcription failed: ${response.status} ${details}`);
+    }
+
+    const data = await response.json();
+    res.json({ text: String(data.text || "").trim() });
+  } catch (error) {
+    console.error("Anu transcription error:", error);
+    res.status(500).json({ error: "Anu could not understand the phone recording." });
   }
 });
 
@@ -354,6 +409,17 @@ function guessMimeType(format) {
   if (normalized === "ogg") return "audio/ogg";
   if (normalized === "aac") return "audio/aac";
   return "audio/mpeg";
+}
+
+function audioExtension(mimeType) {
+  const normalized = String(mimeType || "").toLowerCase();
+  if (normalized.includes("mp4")) return "mp4";
+  if (normalized.includes("mpeg") || normalized.includes("mp3")) return "mp3";
+  if (normalized.includes("wav")) return "wav";
+  if (normalized.includes("ogg")) return "ogg";
+  if (normalized.includes("aac")) return "aac";
+  if (normalized.includes("webm")) return "webm";
+  return "webm";
 }
 
 function normalizeVoiceGender(value) {
