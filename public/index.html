@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Anu Voice Assistant</title>
+    <link rel="stylesheet" href="/styles.css?v=17" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="assistant-panel" aria-labelledby="title">
+        <header class="topbar">
+          <div class="brand-block">
+            <img
+              id="headerLogo"
+              class="header-logo"
+              src="/assets/anu-logo-share.png"
+              alt="ANU - &#1058;&#1072;&#1085;&#1099; &#1076;&#1080;&#1078;&#1080;&#1090;&#1072;&#1083; &#1090;&#1091;&#1089;&#1083;&#1072;&#1093; - Your AI Assistant"
+            />
+            <h1 id="title" class="sr-only">ANU</h1>
+          </div>
+
+          <div class="header-actions">
+            <button id="languageToggle" class="language-toggle" type="button" aria-label="Change language">
+              <span id="languageLabel">&#1052;&#1086;&#1085;&#1075;&#1086;&#1083;</span>
+              <span class="language-knob" aria-hidden="true"></span>
+            </button>
+            <select id="language" class="hidden-control" aria-label="Language">
+              <option value="mn">Mongolian</option>
+              <option value="en">English</option>
+            </select>
+
+            <button id="voiceToggleButton" class="voice-toggle" type="button" aria-label="Change voice">
+              <span id="voiceLabel">&#1069;&#1084;&#1101;&#1075;&#1090;&#1101;&#1081;</span>
+              <span class="voice-knob" aria-hidden="true"></span>
+            </button>
+            <select id="voiceGender" class="hidden-control" aria-label="Voice gender">
+              <option value="female">Female</option>
+              <option value="male">Male</option>
+            </select>
+
+            <button id="wakeToggleButton" class="wake-mode-button" type="button" aria-pressed="false">
+              <span id="wakeLabel">Wake-up</span>
+              <span class="wake-mode-knob" aria-hidden="true"></span>
+            </button>
+
+            <button id="themeToggleButton" class="theme-toggle" type="button" aria-pressed="false">
+              <span id="themeLabel">Dark</span>
+              <span class="theme-knob" aria-hidden="true"></span>
+            </button>
+          </div>
+        </header>
+
+        <div class="stage" aria-live="polite">
+          <p id="status" class="status">
+            &#1058;&#1072;&#1085;&#1099;&#1075;
+            &#1089;&#1086;&#1085;&#1089;&#1086;&#1093;&#1086;&#1076;
+            &#1073;&#1101;&#1083;&#1101;&#1085;
+            &#1073;&#1072;&#1081;&#1085;&#1072;
+          </p>
+
+          <button id="orbButton" class="orb-button" type="button" aria-label="Play Anu Mongolian greeting">
+            <div id="orb" class="orb ready">
+              <div class="orb-core">
+                <img class="orb-logo" src="/assets/amjilt-logo-share.png" alt="" />
+              </div>
+              <div class="orb-ring"></div>
+            </div>
+          </button>
+
+          <p id="hint" class="hint">Click Talk, or enable Wake-up and say "Hey Anu".</p>
+          <p id="anuText" class="spoken-line">
+            &#1057;&#1072;&#1081;&#1085; &#1073;&#1072;&#1081;&#1085;&#1072; &#1091;&#1091;.
+            &#1053;&#1072;&#1084;&#1072;&#1081;&#1075; &#1040;&#1085;&#1091;
+            &#1075;&#1101;&#1076;&#1101;&#1075;. &#1041;&#1080;
+            &#1052;&#1086;&#1085;&#1075;&#1086;&#1083;
+            &#1093;&#1101;&#1088;&#1101;&#1075;&#1083;&#1101;&#1075;&#1095;&#1076;&#1101;&#1076;
+            &#1079;&#1086;&#1088;&#1080;&#1091;&#1083;&#1089;&#1072;&#1085;
+            &#1076;&#1091;&#1091;&#1090; &#1090;&#1091;&#1089;&#1083;&#1072;&#1093;&#1099;&#1085;
+            demo &#1093;&#1091;&#1074;&#1080;&#1083;&#1073;&#1072;&#1088;.
+          </p>
+        </div>
+
+        <div class="controls">
+          <button id="talkButton" class="talk-button" type="button">
+            <span class="mic-icon" aria-hidden="true"></span>
+          </button>
+
+          <input id="wakeMode" class="hidden-control" type="checkbox" />
+        </div>
+
+        <p id="userText" class="sr-only">No question yet.</p>
+      </section>
+    </main>
+
+    <script src="/app.js?v=17" type="module"></script>
+  </body>
+</html>
